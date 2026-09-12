@@ -1,0 +1,935 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Tree Survey</title>
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Tree Survey">
+<meta name="theme-color" content="#EFEBDE">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="icon" href="icon-192.png">
+<style>
+  :root{
+    --paper:#EFEBDE; --paper-dark:#E4DFCE; --ink:#2B2A24; --ink-soft:#5C5A4E;
+    --moss:#46603E; --moss-dark:#33482D; --bark:#7A5B3F; --tag:#D8CDA8;
+    --clay:#B5533C; --amber:#A8741E; --line:#C9C1A4; --radius:3px; --tabs-h:52px;
+  }
+  *{ box-sizing:border-box; }
+  [hidden]{ display:none !important; }
+  html, body{ height:100%; }
+  body{
+    margin:0; background:var(--paper); color:var(--ink);
+    font-family:-apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+    font-size:16px; line-height:1.4;
+    -webkit-text-size-adjust:100%; -webkit-tap-highlight-color:transparent; overscroll-behavior:none;
+  }
+  button{ font-family:inherit; cursor:pointer; touch-action:manipulation; }
+  button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-visible{ outline:2px solid var(--moss); outline-offset:2px; }
+  #app{ min-height:100%; max-width:520px; margin:0 auto; display:flex; flex-direction:column; }
+
+  header.top{ padding:calc(8px + env(safe-area-inset-top)) 10px 4px 14px; display:flex; align-items:center; gap:10px; }
+  .ring{ width:30px; height:30px; border-radius:50%; border:2px solid var(--moss); position:relative; flex-shrink:0; }
+  .ring::before{ content:""; position:absolute; inset:5px; border-radius:50%; border:1.5px solid var(--moss); opacity:.55; }
+  .ring::after{ content:""; position:absolute; inset:11px; border-radius:50%; background:var(--bark); }
+  h1{ font-family:Georgia, "Times New Roman", serif; font-size:19px; font-weight:600; color:var(--moss-dark); margin:0; flex:1; letter-spacing:.2px; }
+  .icon-btn{ width:42px; height:42px; border:0; background:transparent; color:var(--moss-dark); display:grid; place-items:center; border-radius:var(--radius); }
+  .icon-btn.active{ background:var(--paper-dark); }
+
+  .gps-strip{
+    margin:0 14px 8px; display:flex; align-items:center; gap:7px; font-size:12px; color:var(--ink-soft);
+    background:var(--paper-dark); border:1px solid var(--line); border-radius:var(--radius); padding:6px 9px;
+    font-variant-numeric:tabular-nums;
+  }
+  .gps-strip .right{ margin-left:auto; text-align:right; white-space:nowrap; }
+  .dot{ width:8px; height:8px; border-radius:50%; background:#9a9a90; flex-shrink:0; }
+  .dot.ok{ background:var(--moss); }
+  .dot.warn{ background:var(--amber); }
+  .dot.bad{ background:var(--clay); }
+  .dot.stale{ background:#9a9a90; }
+
+  main{ flex:1; padding:0 14px calc(var(--tabs-h) + env(safe-area-inset-bottom) + 96px); }
+  .screen{ display:none; }
+  .screen.active{ display:block; }
+  .screen h2{ font-family:Georgia, serif; font-size:18px; font-weight:600; color:var(--moss-dark); margin:6px 0 10px; }
+  .group-label{ font-size:10.5px; letter-spacing:.09em; text-transform:uppercase; color:var(--ink-soft); margin:6px 0 5px; }
+  .empty{ font-size:13.5px; color:var(--ink-soft); padding:10px 2px; line-height:1.45; }
+
+  /* Species buttons on the Record screen */
+  .sp-btn{
+    position:relative; display:flex; align-items:center; width:100%;
+    background:var(--tag); border:1px solid var(--bark); border-radius:var(--radius);
+    min-height:46px; margin-bottom:6px; padding:0 0 0 14px; text-align:left;
+    font-size:16px; font-weight:600; color:var(--moss-dark);
+    -webkit-user-select:none; user-select:none; -webkit-touch-callout:none; touch-action:manipulation; cursor:pointer;
+  }
+  .sp-btn::before{
+    content:""; position:absolute; top:-5px; left:50%; transform:translateX(-50%);
+    width:8px; height:8px; border-radius:50%; background:var(--paper); border:1.5px solid var(--bark);
+  }
+  .sp-btn:active{ transform:scale(.985); }
+  .sp-btn.starred{ min-height:58px; background:var(--moss); border-color:var(--moss-dark); color:#fff; font-size:18px; }
+  .sp-btn.starred::before{ border-color:var(--moss-dark); }
+  .sp-name{ flex:1; padding:8px 0; }
+  .sp-count{ font-size:12px; font-weight:400; opacity:.85; margin-right:4px; font-variant-numeric:tabular-nums; }
+  .star{
+    width:50px; align-self:stretch; border:0; background:transparent; color:var(--bark);
+    display:grid; place-items:center; border-left:1px solid rgba(0,0,0,.12); border-radius:0 var(--radius) var(--radius) 0;
+  }
+  .sp-btn.starred .star{ color:rgba(255,255,255,.92); border-left-color:rgba(255,255,255,.28); }
+  .star svg{ fill:none; stroke:currentColor; stroke-width:1.7; stroke-linejoin:round; }
+  .star.on svg{ fill:currentColor; }
+  .sp-btn.busy .sp-name::after{ content:" · getting fix…"; font-weight:400; font-size:13px; opacity:.85; }
+  .sp-btn.flash{ box-shadow:0 0 0 3px var(--paper), 0 0 0 5px var(--moss); }
+  .sp-btn.add{ background:transparent; border:1px dashed var(--bark); color:var(--bark); justify-content:center; padding:0; min-height:44px; font-size:15px; }
+  .sp-btn.add::before{ display:none; }
+  .hidden-link{ display:block; width:100%; background:none; border:0; color:var(--ink-soft); font-size:13px; padding:6px; text-decoration:underline; }
+
+  /* Recorded bar */
+  .recorded-bar{
+    position:fixed; left:50%; transform:translateX(-50%); width:calc(100% - 28px); max-width:492px;
+    bottom:calc(var(--tabs-h) + env(safe-area-inset-bottom) + 10px);
+    background:#fff; border:1px solid var(--line); border-radius:var(--radius);
+    box-shadow:0 6px 18px rgba(0,0,0,.14); padding:10px 12px; display:flex; align-items:center; gap:8px; z-index:20;
+  }
+  .recorded-bar.over{ border-color:var(--amber); }
+  .rb-main{ flex:1; min-width:0; }
+  .rb-main b{ display:block; font-size:15px; color:var(--moss-dark); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .rb-main span{ font-size:12px; color:var(--ink-soft); font-variant-numeric:tabular-nums; }
+  .recorded-bar.over .rb-main span{ color:var(--amber); }
+  .rb-btn{ padding:9px 12px; border-radius:var(--radius); font-size:14px; font-weight:600; border:1px solid; white-space:nowrap; }
+  .rb-btn.undo{ background:#fff; color:var(--clay); border-color:var(--clay); font-variant-numeric:tabular-nums; }
+  .rb-btn.note{ background:var(--moss); color:#fff; border-color:var(--moss); }
+
+  /* Tabs */
+  .tabs{
+    position:fixed; bottom:0; left:0; right:0; max-width:520px; margin:0 auto;
+    background:var(--paper); border-top:1px solid var(--line); display:flex;
+    padding-bottom:env(safe-area-inset-bottom); z-index:10;
+  }
+  .tabs button{ flex:1; height:var(--tabs-h); border:0; background:transparent; font-size:13px; color:var(--ink-soft); font-weight:600; }
+  .tabs button.active{ color:var(--moss-dark); box-shadow:inset 0 3px 0 var(--moss); }
+
+  /* Log */
+  .chips{ display:flex; gap:6px; overflow-x:auto; padding:4px 0 8px; -webkit-overflow-scrolling:touch; scrollbar-width:none; }
+  .chips::-webkit-scrollbar{ display:none; }
+  .chips button{ flex-shrink:0; padding:7px 11px; border-radius:16px; border:1px solid var(--line); background:#fff; font-size:13px; color:var(--ink); }
+  .chips button.on{ background:var(--moss-dark); color:#fff; border-color:var(--moss-dark); }
+  .log-row{ display:flex; align-items:center; gap:10px; padding:10px 2px; border-bottom:1px solid var(--line); cursor:pointer; }
+  .lr-main{ flex:1; min-width:0; }
+  .lr-title{ font-size:15px; font-weight:600; color:var(--moss-dark); display:flex; align-items:center; gap:7px; }
+  .sw{ width:10px; height:10px; border-radius:2px; flex-shrink:0; }
+  .lr-meta{ font-size:12px; color:var(--ink-soft); margin-top:2px; font-variant-numeric:tabular-nums; }
+  .lr-data{ font-size:13px; color:var(--ink); margin-top:3px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .over{ color:var(--amber); font-weight:600; }
+  .chev{ color:var(--line); font-size:22px; line-height:1; }
+
+  /* Species screen and settings rows */
+  .sp-row{ display:flex; align-items:center; gap:10px; background:#fff; border:1px solid var(--line); border-radius:var(--radius); padding:8px 8px 8px 12px; margin-bottom:6px; }
+  .sp-row.off{ opacity:.55; }
+  .sp-row .sw{ width:14px; height:14px; }
+  .sp-row .info{ flex:1; min-width:0; cursor:pointer; }
+  .info b{ display:block; font-size:15px; color:var(--moss-dark); }
+  .info span{ font-size:12px; color:var(--ink-soft); }
+  .sp-row .star{ width:42px; height:42px; border-left:0; align-self:center; }
+  .switch{ width:46px; height:28px; border-radius:14px; background:var(--line); position:relative; border:0; flex-shrink:0; padding:0; }
+  .switch::after{ content:""; position:absolute; top:3px; left:3px; width:22px; height:22px; border-radius:50%; background:#fff; box-shadow:0 1px 2px rgba(0,0,0,.25); transition:left .15s; }
+  .switch.on{ background:var(--moss); }
+  .switch.on::after{ left:21px; }
+  .switch:disabled{ opacity:.4; }
+  @media (prefers-reduced-motion: reduce){ .switch::after{ transition:none; } }
+
+  /* Cards, forms, sheet */
+  .card{ background:#fff; border:1px solid var(--line); border-radius:var(--radius); padding:14px; margin-bottom:12px; }
+  .card h3{ font-size:12px; letter-spacing:.07em; text-transform:uppercase; color:var(--ink-soft); margin:0 0 10px; font-weight:600; }
+  .card p{ margin:0 0 8px; font-size:14px; color:var(--ink-soft); }
+  .seg{ display:flex; flex-wrap:wrap; gap:6px; }
+  .seg button{ padding:9px 12px; border:1px solid var(--line); background:#fff; color:var(--ink); border-radius:var(--radius); font-size:15px; }
+  .seg button.on{ background:var(--moss); color:#fff; border-color:var(--moss); }
+  .scope-count{ font-size:13px; color:var(--ink-soft); margin:10px 0 12px; }
+  .export-btns{ display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+  .export-btns button, .btn-like{ padding:14px 10px; border-radius:var(--radius); font-size:15px; font-weight:600; border:1px solid var(--bark); background:var(--bark); color:#fff; text-align:center; display:block; cursor:pointer; }
+  .export-btns .secondary, .btn-like{ background:#fff; color:var(--bark); }
+  .field{ margin-bottom:12px; }
+  .field label{ display:block; font-size:11.5px; color:var(--ink-soft); margin-bottom:4px; letter-spacing:.05em; text-transform:uppercase; }
+  input[type=text], input[type=number], textarea, select{
+    width:100%; font-size:16px; padding:10px; border:1px solid var(--line); border-radius:var(--radius);
+    background:#fff; color:var(--ink); font-family:inherit; -webkit-appearance:none; appearance:none;
+  }
+  select{ background-image:linear-gradient(45deg, transparent 50%, var(--ink-soft) 50%), linear-gradient(135deg, var(--ink-soft) 50%, transparent 50%); background-position:calc(100% - 18px) 50%, calc(100% - 13px) 50%; background-size:5px 5px; background-repeat:no-repeat; padding-right:34px; }
+  textarea{ min-height:64px; resize:vertical; }
+  .unit{ display:flex; align-items:center; gap:8px; }
+  .unit input{ flex:1; }
+  .unit span{ color:var(--ink-soft); font-size:14px; }
+  .swatches{ display:flex; flex-wrap:wrap; gap:8px; }
+  .swatch{ width:34px; height:34px; border-radius:50%; border:3px solid transparent; padding:0; }
+  .swatch.on{ border-color:var(--ink); }
+  .row-actions{ display:flex; gap:8px; margin-top:14px; }
+  .row-actions button{ flex:1; padding:12px; border-radius:var(--radius); font-size:15px; font-weight:600; border:1px solid; }
+  .btn-primary{ background:var(--moss); color:#fff; border-color:var(--moss); }
+  .btn-secondary{ background:#fff; color:var(--moss-dark); border-color:var(--line); }
+  .link-actions{ display:flex; gap:10px; justify-content:center; flex-wrap:wrap; margin-top:12px; }
+  .link-actions button{ background:none; border:0; color:var(--moss-dark); font-size:14px; text-decoration:underline; padding:8px 6px; }
+  .link-actions button.danger{ color:var(--clay); }
+  .toggle-row{ display:flex; align-items:center; justify-content:space-between; gap:12px; padding:11px 0; border-bottom:1px solid var(--line); }
+  .toggle-row:last-child{ border-bottom:0; }
+  .toggle-row .lbl b{ display:block; font-size:15px; font-weight:600; }
+  .toggle-row .lbl span{ font-size:12.5px; color:var(--ink-soft); }
+  .toggle-row input[type=number]{ width:84px; text-align:right; }
+  .backdrop{ position:fixed; inset:0; background:rgba(43,42,36,.45); z-index:30; }
+  .sheet{
+    position:fixed; left:0; right:0; bottom:0; max-width:520px; margin:0 auto; background:var(--paper);
+    border-top:1px solid var(--line); border-radius:12px 12px 0 0; padding:14px 16px calc(16px + env(safe-area-inset-bottom));
+    z-index:31; max-height:88vh; overflow:auto; -webkit-overflow-scrolling:touch;
+  }
+  .sheet h3{ margin:0 0 4px; font-family:Georgia, serif; font-size:18px; color:var(--moss-dark); }
+  .sheet .meta{ font-size:12.5px; color:var(--ink-soft); margin-bottom:12px; font-variant-numeric:tabular-nums; }
+  .sheet .hint{ font-size:12.5px; color:var(--ink-soft); margin:-6px 0 12px; }
+  .toast{
+    position:fixed; left:50%; transform:translateX(-50%); bottom:calc(var(--tabs-h) + env(safe-area-inset-bottom) + 12px);
+    max-width:calc(100% - 28px); padding:10px 14px; border-radius:var(--radius); font-size:14px; z-index:40;
+    background:var(--moss-dark); color:#fff; box-shadow:0 4px 14px rgba(0,0,0,.2); text-align:center;
+  }
+  .toast.err{ background:var(--clay); }
+  .danger-btn{ width:100%; padding:12px; border-radius:var(--radius); font-size:15px; font-weight:600; background:#fff; color:var(--clay); border:1px solid var(--clay); }
+  .about{ font-size:12.5px; color:var(--ink-soft); text-align:center; padding:8px 0 4px; }
+</style>
+</head>
+<body>
+<div id="app">
+  <header class="top">
+    <div class="ring" aria-hidden="true"></div>
+    <h1>Tree Survey</h1>
+    <button class="icon-btn" id="settingsBtn" aria-label="Settings" data-screen="settings">
+      <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/><circle cx="9" cy="7" r="2.2" fill="#EFEBDE"/><circle cx="15" cy="12" r="2.2" fill="#EFEBDE"/><circle cx="8" cy="17" r="2.2" fill="#EFEBDE"/></svg>
+    </button>
+  </header>
+
+  <div class="gps-strip" id="gpsStrip">
+    <span class="dot" id="gpsDot"></span>
+    <span id="gpsText">Waiting for GPS…</span>
+    <span class="right" id="countText"></span>
+  </div>
+
+  <main>
+    <section id="screen-record" class="screen active" aria-label="Record">
+      <div id="speciesList"></div>
+    </section>
+
+    <section id="screen-log" class="screen" aria-label="Log">
+      <div class="chips" id="logChips"></div>
+      <div id="logList"></div>
+    </section>
+
+    <section id="screen-species" class="screen" aria-label="Species">
+      <h2>Species</h2>
+      <div class="empty" style="padding-top:0">Star a species to pin it to the top of the Record screen. Switch one off to hide its button while you are not looking for it. Hidden species keep their trees and still export. Tap a name to edit.</div>
+      <div id="speciesManage"></div>
+      <button class="sp-btn add" id="addSpeciesBtn2">+ Add species</button>
+    </section>
+
+    <section id="screen-export" class="screen" aria-label="Export">
+      <div class="card">
+        <h3>What to export</h3>
+        <div class="seg" id="scopeSeg">
+          <button type="button" class="on" data-val="all">All</button>
+          <button type="button" data-val="today">Today</button>
+          <button type="button" data-val="new">Since last export</button>
+          <button type="button" data-val="species">One species</button>
+        </div>
+        <div class="field" style="margin-top:10px" id="scopeSpeciesWrap" hidden><select id="scopeSpecies" aria-label="Species to export"></select></div>
+        <div class="scope-count" id="scopeCount"></div>
+        <div class="export-btns">
+          <button type="button" data-export="csv">CSV</button>
+          <button type="button" data-export="kml">KML</button>
+          <button type="button" data-export="geojson">GeoJSON</button>
+        </div>
+        <p style="margin-top:10px">CSV for spreadsheets and Google My Maps. KML for Google Earth. GeoJSON for QGIS. The share sheet opens so you can AirDrop, message, mail, or save the file.</p>
+        <div class="scope-count" id="lastExport"></div>
+      </div>
+      <div class="card">
+        <h3>Backup</h3>
+        <p id="dataSummary"></p>
+        <div class="export-btns">
+          <button type="button" data-export="backup">Save backup</button>
+          <label class="btn-like">Restore backup<input type="file" id="restoreInput" accept=".json,application/json" hidden></label>
+        </div>
+        <p style="margin-top:10px">A backup holds everything: species, fields, and every tree. Restoring replaces what is on this phone.</p>
+      </div>
+    </section>
+
+    <section id="screen-settings" class="screen" aria-label="Settings">
+      <h2>Settings</h2>
+      <div class="card">
+        <div class="toggle-row">
+          <div class="lbl"><b>Accuracy standard</b><span>Points worse than this are flagged</span></div>
+          <div class="unit"><input type="number" inputmode="numeric" min="1" max="100" id="setAccuracy" aria-label="Accuracy standard in meters"><span>m</span></div>
+        </div>
+        <div class="toggle-row">
+          <div class="lbl"><b>Keep screen awake</b><span id="wakeHint"></span></div>
+          <button type="button" class="switch" id="setWake" role="switch" aria-label="Keep screen awake"></button>
+        </div>
+        <div class="toggle-row">
+          <div class="lbl"><b>Click on record</b><span>A short tick confirms each tap</span></div>
+          <button type="button" class="switch" id="setSound" role="switch" aria-label="Click sound"></button>
+        </div>
+      </div>
+      <div class="card">
+        <h3>Fields recorded per tree</h3>
+        <p>Every field appears on the note sheet after a tap and becomes a column in every export. Add DBH, vigour, crown class, or anything else here.</p>
+        <div id="fieldList"></div>
+        <button class="sp-btn add" id="addFieldBtn">+ Add field</button>
+      </div>
+      <div class="card">
+        <h3>Data on this phone</h3>
+        <p id="aboutText"></p>
+        <button type="button" class="danger-btn" id="deleteAllBtn">Delete all data</button>
+      </div>
+      <div class="about">Tree Survey · everything stays on this phone until you export it</div>
+    </section>
+  </main>
+
+  <div id="recordedBar" class="recorded-bar" hidden>
+    <div class="rb-main"><b id="rbSpecies"></b><span id="rbMeta"></span></div>
+    <button type="button" class="rb-btn undo" id="rbUndo">Undo <span id="rbCount">10</span></button>
+    <button type="button" class="rb-btn note" id="rbNote">Note</button>
+  </div>
+
+  <nav class="tabs" aria-label="Screens">
+    <button type="button" class="active" data-screen="record">Record</button>
+    <button type="button" data-screen="log">Log</button>
+    <button type="button" data-screen="species">Species</button>
+    <button type="button" data-screen="export">Export</button>
+  </nav>
+
+  <div id="backdrop" class="backdrop" hidden></div>
+  <div id="sheet" class="sheet" role="dialog" aria-modal="true" hidden></div>
+  <div id="toast" class="toast" role="status" hidden></div>
+</div>
+
+<script>
+(() => {
+'use strict';
+
+const APP_VERSION = '1.0.0';
+const STORE_KEY = 'tree-survey:v2';
+const PALETTE = ['#46603E', '#7A5B3F', '#B5533C', '#2F5D7A', '#9A7B1E', '#6B3A5B', '#2E7D6B', '#A34B3B', '#6B7A2E', '#4A4E8C'];
+const RESERVED = ['id', 'species', 'scientific_name', 'latitude', 'longitude', 'altitude_m', 'accuracy_m', 'recorded_utc', 'recorded_local', 'google_maps_url', 'apple_maps_url'];
+const STAR = '<svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M12 2.6l2.9 6.2 6.7.8-4.9 4.6 1.3 6.7L12 17.6l-6 3.3 1.3-6.7L2.4 9.6l6.7-.8z"/></svg>';
+const FIELD_TYPES = { text: 'Text', number: 'Number', choice: 'Choice', bool: 'Yes / No' };
+
+function defaultState() {
+  return {
+    app: 'tree-survey', schemaVersion: 2, createdAt: Date.now(),
+    settings: { accuracyStandard: 10, wakeLock: false, sound: true, lastExportAt: 0 },
+    species: [],
+    fields: [{ key: 'note', label: 'Note', type: 'text', locked: true }],
+    points: []
+  };
+}
+
+let S = load();
+let logFilter = 'all';
+let recording = false;
+let barTimer = null, barPointId = null, barSeconds = 0;
+let wakeLockRef = null, audioCtx = null, toastTimer = null;
+
+/* ---------- helpers ---------- */
+const $ = id => document.getElementById(id);
+const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+const pad2 = n => String(n).padStart(2, '0');
+const pad3 = n => String(n).padStart(3, '0');
+const speciesById = id => S.species.find(s => s.id === id);
+const pointById = id => S.points.find(p => p.id === id);
+const sortedSpecies = () => S.species.slice().sort((a, b) => a.order - b.order);
+const countFor = id => S.points.reduce((n, p) => n + (p.speciesId === id ? 1 : 0), 0);
+function startOfToday() { const d = new Date(); d.setHours(0, 0, 0, 0); return d.getTime(); }
+const todayCount = () => { const t0 = startOfToday(); return S.points.filter(p => p.t >= t0).length; };
+const unexportedCount = () => S.points.filter(p => p.t > (S.settings.lastExportAt || 0)).length;
+const fmtTime = t => new Date(t).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+const fmtDate = t => new Date(t).toLocaleDateString([], { month: 'short', day: 'numeric' });
+const fmtDateTime = t => (t >= startOfToday() ? 'Today' : fmtDate(t)) + ' ' + fmtTime(t);
+const isoUtc = t => new Date(t).toISOString().replace(/\.\d{3}Z$/, 'Z');
+function isoLocal(t, tzo) {
+  if (tzo == null) tzo = new Date(t).getTimezoneOffset();
+  const d = new Date(t - tzo * 60000);
+  const sign = tzo <= 0 ? '+' : '-', a = Math.abs(tzo);
+  return d.getUTCFullYear() + '-' + pad2(d.getUTCMonth() + 1) + '-' + pad2(d.getUTCDate()) + ' ' +
+    pad2(d.getUTCHours()) + ':' + pad2(d.getUTCMinutes()) + ':' + pad2(d.getUTCSeconds()) + ' ' +
+    sign + pad2(Math.floor(a / 60)) + ':' + pad2(a % 60);
+}
+function stampForFile() { const d = new Date(); return d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate()) + '_' + pad2(d.getHours()) + pad2(d.getMinutes()); }
+const gmapsUrl = p => 'https://www.google.com/maps/dir/?api=1&destination=' + p.lat.toFixed(6) + ',' + p.lon.toFixed(6);
+const amapsUrl = p => 'https://maps.apple.com/?daddr=' + p.lat.toFixed(6) + ',' + p.lon.toFixed(6);
+function toast(msg, kind, ms) {
+  const el = $('toast'); el.textContent = msg; el.className = 'toast ' + (kind || 'ok'); el.hidden = false;
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => { el.hidden = true; }, ms || 3000);
+}
+function makeCode(name, excludeId, state) {
+  const st = state || S;
+  const words = String(name || '').trim().split(/\s+/).filter(Boolean);
+  let code = words.length >= 2 ? words.slice(0, 3).map(w => w[0]).join('') : String(name || '').trim().slice(0, 2);
+  code = code.toUpperCase().replace(/[^A-Z0-9]/g, '') || 'SP';
+  let c = code, i = 2;
+  while (st.species.some(s => s.code === c && s.id !== excludeId)) c = code + (i++);
+  return c;
+}
+function makeKey(label, existingKey) {
+  const base = String(label || '').toLowerCase().trim().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '') || 'field';
+  if (existingKey) return existingKey;
+  let k = base, i = 2;
+  while (RESERVED.includes(k) || S.fields.some(f => f.key === k)) k = base + '_' + (i++);
+  return k;
+}
+function nextColor() { const used = S.species.map(s => s.color); return PALETTE.find(c => !used.includes(c)) || PALETTE[S.species.length % PALETTE.length]; }
+
+/* ---------- storage ---------- */
+function migrate(s) {
+  const d = defaultState();
+  s.app = 'tree-survey'; s.schemaVersion = 2;
+  s.settings = Object.assign(d.settings, s.settings || {});
+  if (!Array.isArray(s.species)) s.species = [];
+  if (!Array.isArray(s.points)) s.points = [];
+  if (!Array.isArray(s.fields) || !s.fields.length) s.fields = d.fields;
+  if (!s.fields.some(f => f.key === 'note')) s.fields.unshift(d.fields[0]);
+  s.species.forEach((sp, i) => {
+    if (!sp.id) sp.id = uid();
+    if (sp.order == null) sp.order = i;
+    if (sp.visible == null) sp.visible = true;
+    if (!sp.color) sp.color = PALETTE[i % PALETTE.length];
+    if (!sp.code) sp.code = makeCode(sp.name, sp.id, s);
+    if (sp.counter == null) sp.counter = 0;
+  });
+  s.points.forEach(p => { if (!p.id) p.id = uid(); if (!p.data) p.data = {}; });
+  return s;
+}
+function load() {
+  try { const raw = localStorage.getItem(STORE_KEY); if (raw) return migrate(JSON.parse(raw)); } catch (e) { /* fall through */ }
+  return defaultState();
+}
+function save() {
+  try { localStorage.setItem(STORE_KEY, JSON.stringify(S)); }
+  catch (e) { toast('Could not save. Storage may be full. Save a backup now.', 'err', 6000); }
+}
+
+/* ---------- GPS ---------- */
+const gps = { last: null, watchId: null, error: null, supported: 'geolocation' in navigator };
+function startGps() {
+  if (!gps.supported) { renderGps(); return; }
+  if (gps.watchId != null) { try { navigator.geolocation.clearWatch(gps.watchId); } catch (e) { /* ignore */ } }
+  gps.watchId = navigator.geolocation.watchPosition(onFix, onGpsError, { enableHighAccuracy: true, maximumAge: 0, timeout: 30000 });
+}
+function onFix(pos) {
+  const c = pos.coords;
+  gps.last = { lat: c.latitude, lon: c.longitude, alt: c.altitude == null ? null : c.altitude, acc: c.accuracy == null ? null : c.accuracy, ts: Date.now() };
+  gps.error = null; renderGps();
+}
+function onGpsError(err) { gps.error = err; renderGps(); }
+function freshFix(maxAge) { return gps.last && Date.now() - gps.last.ts <= (maxAge || 5000) ? gps.last : null; }
+function getFix() {
+  return new Promise((resolve, reject) => {
+    const f = freshFix(); if (f) return resolve(f);
+    if (!gps.supported) return reject(new Error('unsupported'));
+    navigator.geolocation.getCurrentPosition(pos => { onFix(pos); resolve(gps.last); }, reject, { enableHighAccuracy: true, maximumAge: 5000, timeout: 12000 });
+  });
+}
+function renderGps() {
+  const dot = $('gpsDot'), txt = $('gpsText');
+  let cls = 'dot', msg;
+  if (!gps.supported) { cls += ' bad'; msg = 'Location not supported in this browser'; }
+  else if (gps.last) {
+    const age = Math.round((Date.now() - gps.last.ts) / 1000);
+    const acc = gps.last.acc == null ? null : Math.round(gps.last.acc);
+    const over = acc != null && acc > S.settings.accuracyStandard;
+    cls += age > 30 ? ' stale' : (over ? ' warn' : ' ok');
+    msg = (acc == null ? 'GPS fix' : '±' + acc + ' m') + ' · ' + (age < 2 ? 'now' : age < 60 ? age + ' s ago' : Math.round(age / 60) + ' min ago');
+  }
+  else if (gps.error && gps.error.code === 1) { cls += ' bad'; msg = 'Location blocked · allow it in iPhone Settings'; }
+  else if (gps.error) { cls += ' bad'; msg = 'No GPS fix yet · move toward open sky'; }
+  else { msg = 'Waiting for GPS…'; }
+  dot.className = cls; txt.textContent = msg;
+  const un = unexportedCount();
+  $('countText').textContent = todayCount() + ' today · ' + (un ? un + ' to export' : 'all exported');
+}
+setInterval(renderGps, 1000);
+
+/* ---------- wake lock and sound ---------- */
+async function applyWakeLock() {
+  if (!('wakeLock' in navigator)) return;
+  try {
+    if (S.settings.wakeLock && !document.hidden) {
+      if (!wakeLockRef) { wakeLockRef = await navigator.wakeLock.request('screen'); wakeLockRef.addEventListener('release', () => { wakeLockRef = null; }); }
+    } else if (wakeLockRef) { await wakeLockRef.release(); wakeLockRef = null; }
+  } catch (e) { wakeLockRef = null; }
+}
+function clickSound() {
+  if (!S.settings.sound) return;
+  try {
+    const AC = window.AudioContext || window.webkitAudioContext; if (!AC) return;
+    audioCtx = audioCtx || new AC();
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+    const t = audioCtx.currentTime, o = audioCtx.createOscillator(), g = audioCtx.createGain();
+    o.type = 'sine'; o.frequency.setValueAtTime(880, t); o.frequency.exponentialRampToValueAtTime(1320, t + 0.06);
+    g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.25, t + 0.008); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.09);
+    o.connect(g); g.connect(audioCtx.destination); o.start(t); o.stop(t + 0.1);
+  } catch (e) { /* sound is optional */ }
+}
+
+/* ---------- record ---------- */
+async function recordSpecies(id) {
+  if (recording) return;
+  const sp = speciesById(id); if (!sp) return;
+  const btn = document.querySelector('.sp-btn[data-id="' + id + '"]');
+  recording = true; if (btn) btn.classList.add('busy');
+  let fix;
+  try { fix = await getFix(); }
+  catch (e) {
+    recording = false; if (btn) btn.classList.remove('busy');
+    toast(e && e.code === 1 ? 'Location is blocked. Allow it in iPhone Settings → Privacy → Location Services.' : 'No GPS fix. Move toward open sky and try again.', 'err', 4500);
+    return;
+  }
+  recording = false;
+  sp.counter = (sp.counter || 0) + 1;
+  const now = Date.now();
+  const pt = { id: uid(), label: sp.code + '-' + pad3(sp.counter), speciesId: sp.id, lat: fix.lat, lon: fix.lon, alt: fix.alt, acc: fix.acc, t: now, tzo: new Date(now).getTimezoneOffset(), data: {} };
+  S.points.push(pt); save(); clickSound();
+  renderRecord(); renderGps();
+  const b2 = document.querySelector('.sp-btn[data-id="' + id + '"]');
+  if (b2) { b2.classList.add('flash'); setTimeout(() => b2.classList.remove('flash'), 700); }
+  showBar(pt);
+}
+function showBar(pt) {
+  const sp = speciesById(pt.speciesId), bar = $('recordedBar');
+  barPointId = pt.id; barSeconds = 10;
+  const over = pt.acc != null && pt.acc > S.settings.accuracyStandard;
+  $('rbSpecies').textContent = pt.label + ' · ' + (sp ? sp.name : '');
+  $('rbMeta').textContent = 'Recorded ' + fmtTime(pt.t) + (pt.acc == null ? '' : ' · ±' + Math.round(pt.acc) + ' m') + (over ? ' · over your ' + S.settings.accuracyStandard + ' m standard' : '');
+  bar.classList.toggle('over', over); bar.hidden = false; $('rbCount').textContent = barSeconds;
+  clearInterval(barTimer);
+  barTimer = setInterval(() => { barSeconds--; if (barSeconds <= 0) { hideBar(); return; } $('rbCount').textContent = barSeconds; }, 1000);
+}
+function hideBar() { clearInterval(barTimer); barTimer = null; $('recordedBar').hidden = true; barPointId = null; }
+function undoPoint(id) {
+  const i = S.points.findIndex(p => p.id === id); if (i < 0) return;
+  const pt = S.points[i]; S.points.splice(i, 1);
+  const sp = speciesById(pt.speciesId);
+  if (sp && pt.label === sp.code + '-' + pad3(sp.counter)) sp.counter = Math.max(0, sp.counter - 1);
+  save(); hideBar(); renderAll(); toast('Removed ' + pt.label);
+}
+$('rbUndo').addEventListener('click', () => { if (barPointId) undoPoint(barPointId); });
+$('rbNote').addEventListener('click', () => { if (barPointId) openPointSheet(barPointId); });
+
+/* ---------- Record screen ---------- */
+function speciesBtn(sp) {
+  const n = countFor(sp.id);
+  return '<div class="sp-btn' + (sp.starred ? ' starred' : '') + '" data-id="' + sp.id + '" role="button" tabindex="0" aria-label="Record ' + esc(sp.name) + '">' +
+    '<span class="sp-name">' + esc(sp.name) + '</span>' +
+    '<span class="sp-count">' + (n || '') + '</span>' +
+    '<button type="button" class="star' + (sp.starred ? ' on' : '') + '" data-star="' + sp.id + '" aria-label="' + (sp.starred ? 'Unstar ' : 'Star ') + esc(sp.name) + '" aria-pressed="' + !!sp.starred + '">' + STAR + '</button>' +
+    '</div>';
+}
+function renderRecord() {
+  const all = sortedSpecies();
+  const starred = all.filter(s => s.visible && s.starred);
+  const others = all.filter(s => s.visible && !s.starred);
+  const hidden = all.filter(s => !s.visible).length;
+  let html = '';
+  if (!all.length) html += '<div class="empty">No species yet. Tap <b>+ Add species</b> to make your first button. Each tap on a species button records the tree where you stand.</div>';
+  if (starred.length) html += '<div class="group-label">Starred</div>' + starred.map(speciesBtn).join('');
+  if (others.length) html += (starred.length ? '<div class="group-label">Others</div>' : '') + others.map(speciesBtn).join('');
+  html += '<button type="button" class="sp-btn add" id="addSpeciesBtn">+ Add species</button>';
+  if (hidden) html += '<button type="button" class="hidden-link" data-screen="species">' + hidden + ' hidden · manage species</button>';
+  $('speciesList').innerHTML = html;
+}
+$('speciesList').addEventListener('click', e => {
+  const star = e.target.closest('[data-star]'); if (star) { toggleStar(star.dataset.star); return; }
+  if (e.target.closest('#addSpeciesBtn')) { openSpeciesSheet(null); return; }
+  const nav = e.target.closest('[data-screen]'); if (nav) { showScreen(nav.dataset.screen); return; }
+  const btn = e.target.closest('.sp-btn[data-id]'); if (btn) recordSpecies(btn.dataset.id);
+});
+$('speciesList').addEventListener('keydown', e => {
+  if (e.key !== 'Enter' && e.key !== ' ') return;
+  const btn = e.target.closest('.sp-btn[data-id]'); if (btn) { e.preventDefault(); recordSpecies(btn.dataset.id); }
+});
+function toggleStar(id) { const sp = speciesById(id); if (!sp) return; sp.starred = !sp.starred; save(); renderRecord(); renderSpecies(); }
+function toggleVisible(id) { const sp = speciesById(id); if (!sp) return; sp.visible = !sp.visible; save(); renderRecord(); renderSpecies(); }
+
+/* ---------- Log screen ---------- */
+function renderLog() {
+  const all = sortedSpecies();
+  $('logChips').innerHTML = '<button type="button" class="' + (logFilter === 'all' ? 'on' : '') + '" data-filter="all">All (' + S.points.length + ')</button>' +
+    all.map(sp => '<button type="button" class="' + (logFilter === sp.id ? 'on' : '') + '" data-filter="' + sp.id + '">' + esc(sp.name) + ' (' + countFor(sp.id) + ')</button>').join('');
+  let pts = S.points.slice().sort((a, b) => b.t - a.t);
+  if (logFilter !== 'all') pts = pts.filter(p => p.speciesId === logFilter);
+  const list = $('logList');
+  if (!pts.length) { list.innerHTML = '<div class="empty">Nothing recorded yet.</div>'; return; }
+  const MAX = 200;
+  list.innerHTML = pts.slice(0, MAX).map(p => {
+    const sp = speciesById(p.speciesId);
+    const over = p.acc != null && p.acc > S.settings.accuracyStandard;
+    const extras = S.fields.filter(f => p.data && p.data[f.key] !== '' && p.data[f.key] != null)
+      .map(f => (f.key === 'note' ? '' : f.label + ': ') + p.data[f.key] + (f.unit ? ' ' + f.unit : '')).join(' · ');
+    return '<div class="log-row" data-id="' + p.id + '" role="button" tabindex="0">' +
+      '<div class="lr-main"><div class="lr-title"><span class="sw" style="background:' + (sp ? sp.color : '#999') + '"></span>' + esc(p.label) + ' · ' + esc(sp ? sp.name : 'Unknown') + '</div>' +
+      '<div class="lr-meta">' + fmtDateTime(p.t) + (p.acc == null ? '' : ' · <span class="' + (over ? 'over' : '') + '">±' + Math.round(p.acc) + ' m</span>') + (p.refixedAt ? ' · re-fixed' : '') + '</div>' +
+      (extras ? '<div class="lr-data">' + esc(extras) + '</div>' : '') + '</div><span class="chev">›</span></div>';
+  }).join('') + (pts.length > MAX ? '<div class="empty">Showing the latest ' + MAX + ' of ' + pts.length + '. Export for the full list.</div>' : '');
+}
+$('logChips').addEventListener('click', e => { const b = e.target.closest('[data-filter]'); if (b) { logFilter = b.dataset.filter; renderLog(); } });
+$('logList').addEventListener('click', e => { const r = e.target.closest('.log-row'); if (r) openPointSheet(r.dataset.id); });
+$('logList').addEventListener('keydown', e => { if (e.key === 'Enter') { const r = e.target.closest('.log-row'); if (r) openPointSheet(r.dataset.id); } });
+
+/* ---------- Species screen ---------- */
+function renderSpecies() {
+  const all = sortedSpecies(), list = $('speciesManage');
+  if (!all.length) { list.innerHTML = '<div class="empty">No species yet.</div>'; return; }
+  list.innerHTML = all.map(sp => '<div class="sp-row' + (sp.visible ? '' : ' off') + '" data-id="' + sp.id + '">' +
+    '<span class="sw" style="background:' + sp.color + '"></span>' +
+    '<div class="info" data-edit="' + sp.id + '" role="button" tabindex="0"><b>' + esc(sp.name) + '</b><span>' + (sp.sci ? esc(sp.sci) + ' · ' : '') + esc(sp.code) + ' · ' + countFor(sp.id) + ' recorded' + (sp.visible ? '' : ' · hidden') + '</span></div>' +
+    '<button type="button" class="star' + (sp.starred ? ' on' : '') + '" data-star="' + sp.id + '" aria-label="Star ' + esc(sp.name) + '" aria-pressed="' + !!sp.starred + '">' + STAR + '</button>' +
+    '<button type="button" class="switch' + (sp.visible ? ' on' : '') + '" data-vis="' + sp.id + '" role="switch" aria-checked="' + !!sp.visible + '" aria-label="Show ' + esc(sp.name) + ' on the Record screen"></button>' +
+    '</div>').join('');
+}
+$('speciesManage').addEventListener('click', e => {
+  const star = e.target.closest('[data-star]'); if (star) { toggleStar(star.dataset.star); return; }
+  const vis = e.target.closest('[data-vis]'); if (vis) { toggleVisible(vis.dataset.vis); return; }
+  const ed = e.target.closest('[data-edit]'); if (ed) openSpeciesSheet(ed.dataset.edit);
+});
+$('speciesManage').addEventListener('keydown', e => { if (e.key === 'Enter') { const ed = e.target.closest('[data-edit]'); if (ed) openSpeciesSheet(ed.dataset.edit); } });
+$('addSpeciesBtn2').addEventListener('click', () => openSpeciesSheet(null));
+function moveSpecies(id, dir) {
+  const all = sortedSpecies(); const i = all.findIndex(s => s.id === id); const j = i + dir;
+  if (i < 0 || j < 0 || j >= all.length) return false;
+  all.forEach((s, k) => { s.order = k; });
+  const t = all[i].order; all[i].order = all[j].order; all[j].order = t;
+  save(); renderRecord(); renderSpecies(); return true;
+}
+
+/* ---------- sheets ---------- */
+function openSheet(html) {
+  hideBar(); const sh = $('sheet'); sh.innerHTML = html; sh.hidden = false; $('backdrop').hidden = false; sh.scrollTop = 0;
+  const c = $('sheetCancel'); if (c) c.addEventListener('click', closeSheet);
+}
+function closeSheet() { $('sheet').hidden = true; $('backdrop').hidden = true; $('sheet').innerHTML = ''; }
+$('backdrop').addEventListener('click', closeSheet);
+$('sheet').addEventListener('click', e => {
+  const b = e.target.closest('.seg > button');
+  if (b) { const was = b.classList.contains('on'); b.parentElement.querySelectorAll('button').forEach(x => x.classList.remove('on')); if (!was) b.classList.add('on'); return; }
+  const sw = e.target.closest('.swatch');
+  if (sw) { sw.parentElement.querySelectorAll('.swatch').forEach(x => x.classList.remove('on')); sw.classList.add('on'); return; }
+  const tg = e.target.closest('.switch');
+  if (tg) { tg.classList.toggle('on'); tg.setAttribute('aria-checked', tg.classList.contains('on')); }
+});
+function switchHtml(id, on) { return '<button type="button" class="switch' + (on ? ' on' : '') + '" id="' + id + '" role="switch" aria-checked="' + !!on + '"></button>'; }
+
+function fieldInput(f, val) {
+  const id = 'f_' + f.key, v = val == null ? '' : val;
+  if (f.type === 'number') {
+    return '<div class="field"><label for="' + id + '">' + esc(f.label) + '</label><div class="unit"><input type="number" inputmode="decimal" step="any" id="' + id + '" data-key="' + esc(f.key) + '" value="' + esc(v) + '">' + (f.unit ? '<span>' + esc(f.unit) + '</span>' : '') + '</div></div>';
+  }
+  if (f.type === 'choice' || f.type === 'bool') {
+    const opts = f.type === 'bool' ? ['Yes', 'No'] : (f.options || []);
+    return '<div class="field"><label>' + esc(f.label) + '</label><div class="seg" data-key="' + esc(f.key) + '">' + opts.map(o => '<button type="button" class="' + (String(v) === o ? 'on' : '') + '" data-val="' + esc(o) + '">' + esc(o) + '</button>').join('') + '</div></div>';
+  }
+  if (f.key === 'note') return '<div class="field"><label for="' + id + '">' + esc(f.label) + '</label><textarea id="' + id + '" data-key="note" placeholder="Optional: size, condition, where it stands…">' + esc(v) + '</textarea></div>';
+  return '<div class="field"><label for="' + id + '">' + esc(f.label) + '</label><input type="text" id="' + id + '" data-key="' + esc(f.key) + '" value="' + esc(v) + '"></div>';
+}
+function readFields(container) {
+  const data = {};
+  container.querySelectorAll('[data-key]').forEach(el => {
+    const k = el.dataset.key;
+    if (el.classList.contains('seg')) { const on = el.querySelector('button.on'); data[k] = on ? on.dataset.val : ''; }
+    else { const s = el.value.trim(); data[k] = (el.type === 'number' && s !== '') ? Number(s) : s; }
+  });
+  return data;
+}
+
+function openPointSheet(id) {
+  const pt = pointById(id); if (!pt) return;
+  const sp = speciesById(pt.speciesId);
+  const over = pt.acc != null && pt.acc > S.settings.accuracyStandard;
+  openSheet('<h3>' + esc(pt.label) + ' · ' + esc(sp ? sp.name : 'Unknown') + '</h3>' +
+    '<div class="meta">' + pt.lat.toFixed(5) + ', ' + pt.lon.toFixed(5) + (pt.acc == null ? '' : ' · <span class="' + (over ? 'over' : '') + '">±' + Math.round(pt.acc) + ' m</span>') + ' · ' + fmtDateTime(pt.t) + (pt.refixedAt ? ' · location re-fixed' : '') + '</div>' +
+    '<div id="ptFields">' + S.fields.map(f => fieldInput(f, pt.data ? pt.data[f.key] : undefined)).join('') + '</div>' +
+    '<div class="row-actions"><button type="button" class="btn-secondary" id="sheetCancel">Cancel</button><button type="button" class="btn-primary" id="ptSave">Save</button></div>' +
+    '<div class="link-actions"><button type="button" id="ptRefix">Re-fix location</button><button type="button" id="ptShare">Share</button><button type="button" id="ptDelete" class="danger">Delete</button></div>');
+  $('ptSave').addEventListener('click', () => { pt.data = readFields($('ptFields')); save(); closeSheet(); renderAll(); toast('Saved ' + pt.label); });
+  $('ptRefix').addEventListener('click', () => refixPoint(id));
+  $('ptShare').addEventListener('click', () => sharePoint(id));
+  $('ptDelete').addEventListener('click', () => {
+    if (!confirm('Delete ' + pt.label + ' (' + (sp ? sp.name : '') + ')? This cannot be undone.')) return;
+    S.points = S.points.filter(p => p.id !== id); save(); closeSheet(); renderAll(); toast('Deleted ' + pt.label);
+  });
+}
+async function refixPoint(id) {
+  const pt = pointById(id); if (!pt) return;
+  const btn = $('ptRefix'); if (btn) btn.textContent = 'Getting fix…';
+  try {
+    const fix = await getFix();
+    if (!pt.orig) pt.orig = { lat: pt.lat, lon: pt.lon, alt: pt.alt, acc: pt.acc };
+    pt.lat = fix.lat; pt.lon = fix.lon; pt.alt = fix.alt; pt.acc = fix.acc; pt.refixedAt = Date.now();
+    save(); openPointSheet(id); renderAll(); toast('Location updated' + (fix.acc == null ? '' : ' (±' + Math.round(fix.acc) + ' m)'));
+  } catch (e) { if (btn) btn.textContent = 'Re-fix location'; toast('No GPS fix. Try again under open sky.', 'err'); }
+}
+async function sharePoint(id) {
+  const pt = pointById(id); if (!pt) return;
+  const sp = speciesById(pt.speciesId);
+  const title = pt.label + ' ' + (sp ? sp.name : ''), text = title + '\n' + gmapsUrl(pt);
+  if (navigator.share) { try { await navigator.share({ title, text }); } catch (e) { /* cancelled */ } }
+  else if (navigator.clipboard) { try { await navigator.clipboard.writeText(text); toast('Link copied'); } catch (e) { toast(gmapsUrl(pt), 'ok', 8000); } }
+}
+
+function openSpeciesSheet(id) {
+  const sp = id ? speciesById(id) : null;
+  const color = sp ? sp.color : nextColor();
+  openSheet('<h3>' + (sp ? 'Edit species' : 'Add species') + '</h3>' +
+    '<div class="field"><label for="spName">Name</label><input type="text" id="spName" value="' + esc(sp ? sp.name : '') + '" placeholder="e.g. White Oak" autocapitalize="words" autocomplete="off"></div>' +
+    '<div class="field"><label for="spSci">Scientific name (optional)</label><input type="text" id="spSci" value="' + esc(sp ? sp.sci || '' : '') + '" placeholder="e.g. Quercus alba" autocapitalize="off" autocomplete="off"></div>' +
+    '<div class="field"><label for="spCode">Code for tree labels</label><input type="text" id="spCode" value="' + esc(sp ? sp.code : '') + '" placeholder="Filled in from the name, e.g. WO" autocapitalize="characters" autocomplete="off" maxlength="4"></div>' +
+    '<div class="field"><label>Pin color</label><div class="swatches" id="spSwatches">' + PALETTE.map(c => '<button type="button" class="swatch' + (c === color ? ' on' : '') + '" data-color="' + c + '" style="background:' + c + '" aria-label="Color ' + c + '"></button>').join('') + '</div></div>' +
+    '<div class="toggle-row"><div class="lbl"><b>Starred</b><span>Pinned to the top of the Record screen</span></div>' + switchHtml('spStar', sp && sp.starred) + '</div>' +
+    '<div class="toggle-row"><div class="lbl"><b>Shown on the Record screen</b><span>Switch off to hide the button for now</span></div>' + switchHtml('spVis', !sp || sp.visible) + '</div>' +
+    '<div class="row-actions"><button type="button" class="btn-secondary" id="sheetCancel">Cancel</button><button type="button" class="btn-primary" id="spSave">' + (sp ? 'Save' : 'Add species') + '</button></div>' +
+    (sp ? '<div class="link-actions"><button type="button" id="spUp">Move up</button><button type="button" id="spDown">Move down</button><button type="button" id="spDelete" class="danger">Delete</button></div>' : ''));
+  $('spName').addEventListener('blur', () => { const c = $('spCode'); if (!c.value.trim() && $('spName').value.trim()) c.value = makeCode($('spName').value, sp ? sp.id : null); });
+  $('spSave').addEventListener('click', () => {
+    const name = $('spName').value.trim();
+    if (!name) { toast('Give the species a name.', 'err'); $('spName').focus(); return; }
+    if (S.species.some(s => s.name.toLowerCase() === name.toLowerCase() && s.id !== (sp && sp.id))) { toast('That species is already in the list.', 'err'); return; }
+    let code = $('spCode').value.trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
+    if (!code) code = makeCode(name, sp ? sp.id : null);
+    if (S.species.some(s => s.code === code && s.id !== (sp && sp.id))) { toast('Code ' + code + ' is already used. Pick another.', 'err'); return; }
+    const sw = $('spSwatches').querySelector('.swatch.on');
+    const rec = sp || { id: uid(), order: S.species.reduce((m, s) => Math.max(m, s.order), -1) + 1, counter: 0 };
+    rec.name = name; rec.sci = $('spSci').value.trim(); rec.code = code; rec.color = sw ? sw.dataset.color : color;
+    rec.starred = $('spStar').classList.contains('on'); rec.visible = $('spVis').classList.contains('on');
+    if (!sp) S.species.push(rec);
+    save(); closeSheet(); renderAll(); toast(sp ? 'Saved ' + name : 'Added ' + name);
+  });
+  if (sp) {
+    $('spUp').addEventListener('click', () => { if (moveSpecies(sp.id, -1)) toast('Moved up'); });
+    $('spDown').addEventListener('click', () => { if (moveSpecies(sp.id, 1)) toast('Moved down'); });
+    $('spDelete').addEventListener('click', () => {
+      const n = countFor(sp.id);
+      if (n) { toast(n + ' trees are recorded as ' + sp.name + '. Hide it instead of deleting.', 'err', 4500); return; }
+      if (!confirm('Delete ' + sp.name + '?')) return;
+      S.species = S.species.filter(s => s.id !== sp.id); save(); closeSheet(); renderAll(); toast('Deleted ' + sp.name);
+    });
+  } else { setTimeout(() => $('spName').focus(), 60); }
+}
+
+function openFieldSheet(key) {
+  const f = key ? S.fields.find(x => x.key === key) : null;
+  openSheet('<h3>' + (f ? 'Edit field' : 'Add field') + '</h3>' +
+    '<div class="field"><label for="fdLabel">Label</label><input type="text" id="fdLabel" value="' + esc(f ? f.label : '') + '" placeholder="e.g. DBH, Vigour, Crown class" autocomplete="off"' + (f && f.locked ? ' disabled' : '') + '></div>' +
+    '<div class="field"><label for="fdType">Type</label><select id="fdType"' + (f && f.locked ? ' disabled' : '') + '>' + Object.keys(FIELD_TYPES).map(t => '<option value="' + t + '"' + ((f ? f.type : 'text') === t ? ' selected' : '') + '>' + FIELD_TYPES[t] + '</option>').join('') + '</select></div>' +
+    '<div class="field" id="fdUnitWrap"><label for="fdUnit">Unit</label><input type="text" id="fdUnit" value="' + esc(f ? f.unit || '' : '') + '" placeholder="e.g. in, cm, ft" autocomplete="off"></div>' +
+    '<div class="field" id="fdOptsWrap"><label for="fdOpts">Choices, one per line</label><textarea id="fdOpts" placeholder="Dominant&#10;Codominant&#10;Intermediate&#10;Suppressed">' + esc(f && f.options ? f.options.join('\n') : '') + '</textarea></div>' +
+    (f && f.locked ? '<div class="hint">The note field is built in. Its label and type stay as they are.</div>' : '') +
+    '<div class="row-actions"><button type="button" class="btn-secondary" id="sheetCancel">Cancel</button><button type="button" class="btn-primary" id="fdSave">' + (f ? 'Save' : 'Add field') + '</button></div>' +
+    (f && !f.locked ? '<div class="link-actions"><button type="button" id="fdUp">Move up</button><button type="button" id="fdDown">Move down</button><button type="button" id="fdDelete" class="danger">Delete</button></div>' : ''));
+  const sync = () => { const t = $('fdType').value; $('fdUnitWrap').hidden = t !== 'number'; $('fdOptsWrap').hidden = t !== 'choice'; };
+  $('fdType').addEventListener('change', sync); sync();
+  $('fdSave').addEventListener('click', () => {
+    const label = f && f.locked ? f.label : $('fdLabel').value.trim();
+    if (!label) { toast('Give the field a label.', 'err'); return; }
+    const type = f && f.locked ? f.type : $('fdType').value;
+    const rec = f || { key: makeKey(label) };
+    rec.label = label; rec.type = type;
+    if (type === 'number') rec.unit = $('fdUnit').value.trim(); else delete rec.unit;
+    if (type === 'choice') {
+      rec.options = $('fdOpts').value.split('\n').map(s => s.trim()).filter(Boolean);
+      if (!rec.options.length) { toast('Add at least one choice.', 'err'); return; }
+    } else delete rec.options;
+    if (!f) S.fields.push(rec);
+    save(); closeSheet(); renderSettings(); toast(f ? 'Saved ' + label : 'Added ' + label);
+  });
+  if (f && !f.locked) {
+    const move = dir => { const i = S.fields.indexOf(f), j = i + dir; if (j < 0 || j >= S.fields.length) return; S.fields.splice(i, 1); S.fields.splice(j, 0, f); save(); renderSettings(); toast(dir < 0 ? 'Moved up' : 'Moved down'); };
+    $('fdUp').addEventListener('click', () => move(-1));
+    $('fdDown').addEventListener('click', () => move(1));
+    $('fdDelete').addEventListener('click', () => {
+      if (!confirm('Remove the field "' + f.label + '"? Values already recorded stay in the backup but leave the CSV, KML, and GeoJSON exports.')) return;
+      S.fields = S.fields.filter(x => x !== f); save(); closeSheet(); renderSettings(); toast('Removed ' + f.label);
+    });
+  }
+}
+
+/* ---------- exports ---------- */
+function exportColumns() { return RESERVED.slice(0, 9).concat(S.fields.map(f => f.key), ['google_maps_url', 'apple_maps_url']); }
+function rowFor(pt) {
+  const sp = speciesById(pt.speciesId) || { name: 'Unknown', sci: '' };
+  const r = {
+    id: pt.label, species: sp.name, scientific_name: sp.sci || '',
+    latitude: +pt.lat.toFixed(6), longitude: +pt.lon.toFixed(6),
+    altitude_m: pt.alt == null ? '' : +pt.alt.toFixed(1), accuracy_m: pt.acc == null ? '' : +pt.acc.toFixed(1),
+    recorded_utc: isoUtc(pt.t), recorded_local: isoLocal(pt.t, pt.tzo)
+  };
+  S.fields.forEach(f => { const v = pt.data ? pt.data[f.key] : undefined; r[f.key] = v == null ? '' : v; });
+  r.google_maps_url = gmapsUrl(pt); r.apple_maps_url = amapsUrl(pt);
+  return r;
+}
+function toCSV(points) {
+  const cols = exportColumns();
+  const q = v => { const s = String(v == null ? '' : v); return /[",\r\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
+  const lines = [cols.join(',')].concat(points.map(p => { const r = rowFor(p); return cols.map(c => q(r[c])).join(','); }));
+  return '\uFEFF' + lines.join('\r\n') + '\r\n';
+}
+const xml = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&apos;' }[c]));
+const cdata = s => '<![CDATA[' + String(s).replace(/]]>/g, ']]]]><![CDATA[>') + ']]>';
+function kmlColor(hex) { const h = hex.replace('#', ''); return 'ff' + h.slice(4, 6) + h.slice(2, 4) + h.slice(0, 2); }
+function toKML(points) {
+  const cols = exportColumns();
+  const groups = sortedSpecies().map(sp => ({ sp, pts: points.filter(p => p.speciesId === sp.id) })).filter(g => g.pts.length);
+  const orphans = points.filter(p => !speciesById(p.speciesId));
+  if (orphans.length) groups.push({ sp: { id: 'unknown', name: 'Unknown', color: '#888888', sci: '' }, pts: orphans });
+  let out = '<?xml version="1.0" encoding="UTF-8"?>\n<kml xmlns="http://www.opengis.net/kml/2.2">\n<Document>\n<name>Tree Survey ' + xml(stampForFile().replace('_', ' ')) + '</name>\n';
+  groups.forEach(g => {
+    out += '<Style id="sp-' + xml(g.sp.id) + '"><IconStyle><color>' + kmlColor(g.sp.color) + '</color><scale>1.1</scale><Icon><href>http://maps.google.com/mapfiles/kml/paddle/wht-blank.png</href></Icon></IconStyle><LabelStyle><scale>0.8</scale></LabelStyle></Style>\n';
+  });
+  groups.forEach(g => {
+    out += '<Folder><name>' + xml(g.sp.name) + ' (' + g.pts.length + ')</name>\n';
+    g.pts.forEach(p => {
+      const r = rowFor(p);
+      const extra = S.fields.filter(f => f.key !== 'note' && r[f.key] !== '').map(f => esc(f.label) + ': ' + esc(r[f.key]) + (f.unit ? ' ' + esc(f.unit) : '')).join('<br>');
+      const desc = '<b>' + esc(g.sp.name) + '</b>' + (g.sp.sci ? ' <i>' + esc(g.sp.sci) + '</i>' : '') + '<br>' +
+        (r.note ? esc(r.note) + '<br>' : '') + (extra ? extra + '<br>' : '') +
+        (p.acc == null ? '' : '±' + Math.round(p.acc) + ' m · ') + esc(fmtDate(p.t)) + ' ' + esc(fmtTime(p.t)) + '<br>' +
+        '<a href="' + gmapsUrl(p) + '">Navigate (Google Maps)</a> · <a href="' + amapsUrl(p) + '">Apple Maps</a>';
+      out += '<Placemark><name>' + xml(p.label) + ' · ' + xml(g.sp.name) + '</name><styleUrl>#sp-' + xml(g.sp.id) + '</styleUrl>' +
+        '<TimeStamp><when>' + isoUtc(p.t) + '</when></TimeStamp><ExtendedData>' +
+        cols.filter(c => c !== 'google_maps_url' && c !== 'apple_maps_url').map(c => '<Data name="' + xml(c) + '"><value>' + xml(r[c]) + '</value></Data>').join('') +
+        '</ExtendedData><description>' + cdata(desc) + '</description>' +
+        '<Point><altitudeMode>clampToGround</altitudeMode><coordinates>' + r.longitude + ',' + r.latitude + ',0</coordinates></Point></Placemark>\n';
+    });
+    out += '</Folder>\n';
+  });
+  return out + '</Document>\n</kml>\n';
+}
+function toGeoJSON(points) {
+  return JSON.stringify({ type: 'FeatureCollection', name: 'tree-survey', features: points.map(p => { const r = rowFor(p); return { type: 'Feature', geometry: { type: 'Point', coordinates: [r.longitude, r.latitude] }, properties: r }; }) }, null, 1);
+}
+async function shareFile(name, mime, text) {
+  const blob = new Blob([text], { type: mime });
+  if (navigator.share && navigator.canShare) {
+    for (const type of [mime, 'application/octet-stream']) {
+      const file = new File([blob], name, { type });
+      if (!navigator.canShare({ files: [file] })) continue;
+      try { await navigator.share({ files: [file], title: name }); return true; }
+      catch (e) { if (e && e.name === 'AbortError') return false; break; }
+    }
+  }
+  const url = URL.createObjectURL(blob), a = document.createElement('a');
+  a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 15000);
+  return true;
+}
+function scopePoints() {
+  const on = document.querySelector('#scopeSeg button.on'); const kind = on ? on.dataset.val : 'all';
+  let pts = S.points.slice().sort((a, b) => a.t - b.t);
+  if (kind === 'today') { const t0 = startOfToday(); pts = pts.filter(p => p.t >= t0); }
+  else if (kind === 'new') pts = pts.filter(p => p.t > (S.settings.lastExportAt || 0));
+  else if (kind === 'species') { const id = $('scopeSpecies').value; pts = pts.filter(p => p.speciesId === id); }
+  return { kind, pts };
+}
+function renderExport() {
+  const sel = $('scopeSpecies'), prev = sel.value;
+  sel.innerHTML = sortedSpecies().map(sp => '<option value="' + sp.id + '">' + esc(sp.name) + ' (' + countFor(sp.id) + ')</option>').join('');
+  if (prev && [...sel.options].some(o => o.value === prev)) sel.value = prev;
+  const { kind, pts } = scopePoints();
+  $('scopeSpeciesWrap').hidden = kind !== 'species';
+  $('scopeCount').textContent = pts.length + (pts.length === 1 ? ' tree' : ' trees') + ' in this export';
+  const le = S.settings.lastExportAt;
+  $('lastExport').textContent = le ? 'Last export ' + fmtDateTime(le) + ' · ' + unexportedCount() + ' recorded since' : 'Nothing exported yet';
+  $('dataSummary').textContent = S.species.length + ' species · ' + S.fields.length + ' fields · ' + S.points.length + ' trees on this phone';
+}
+$('scopeSeg').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; $('scopeSeg').querySelectorAll('button').forEach(x => x.classList.remove('on')); b.classList.add('on'); renderExport(); });
+$('scopeSpecies').addEventListener('change', renderExport);
+document.querySelectorAll('[data-export]').forEach(b => b.addEventListener('click', () => doExport(b.dataset.export)));
+async function doExport(fmt) {
+  const { kind, pts } = scopePoints();
+  if (fmt !== 'backup' && !pts.length) { toast('Nothing to export in this scope.', 'err'); return; }
+  const stamp = stampForFile(); let name, mime, text;
+  if (fmt === 'csv') { name = 'tree-survey_' + stamp + '.csv'; mime = 'text/csv'; text = toCSV(pts); }
+  else if (fmt === 'kml') { name = 'tree-survey_' + stamp + '.kml'; mime = 'application/vnd.google-earth.kml+xml'; text = toKML(pts); }
+  else if (fmt === 'geojson') { name = 'tree-survey_' + stamp + '.geojson'; mime = 'application/geo+json'; text = toGeoJSON(pts); }
+  else { name = 'tree-survey-backup_' + stamp + '.json'; mime = 'application/json'; text = JSON.stringify(Object.assign({}, S, { exportedAt: new Date().toISOString(), appVersion: APP_VERSION }), null, 1); }
+  const ok = await shareFile(name, mime, text);
+  if (ok && fmt !== 'backup' && (kind === 'all' || kind === 'new')) { S.settings.lastExportAt = Date.now(); save(); }
+  if (ok) toast('Exported ' + name, 'ok', 4000);
+  renderExport(); renderGps();
+}
+$('restoreInput').addEventListener('change', async e => {
+  const f = e.target.files && e.target.files[0]; e.target.value = ''; if (!f) return;
+  let obj;
+  try { obj = JSON.parse(await f.text()); } catch (err) { toast('That file is not a Tree Survey backup.', 'err'); return; }
+  if (!obj || obj.app !== 'tree-survey' || !Array.isArray(obj.points)) { toast('That file is not a Tree Survey backup.', 'err'); return; }
+  const msg = 'Replace everything on this phone with this backup?\n\nBackup: ' + (obj.species || []).length + ' species, ' + obj.points.length + ' trees.\nOn this phone now: ' + S.species.length + ' species, ' + S.points.length + ' trees.';
+  if (!confirm(msg)) return;
+  S = migrate(obj); save(); renderAll(); toast('Backup restored.');
+});
+
+/* ---------- settings ---------- */
+function renderSettings() {
+  $('setAccuracy').value = S.settings.accuracyStandard;
+  const wl = 'wakeLock' in navigator;
+  $('setWake').classList.toggle('on', !!S.settings.wakeLock); $('setWake').setAttribute('aria-checked', !!S.settings.wakeLock); $('setWake').disabled = !wl;
+  $('wakeHint').textContent = wl ? 'Keeps the GPS warm between trees. Uses more battery.' : 'Needs iOS 16.4 or later.';
+  $('setSound').classList.toggle('on', !!S.settings.sound); $('setSound').setAttribute('aria-checked', !!S.settings.sound);
+  $('fieldList').innerHTML = S.fields.map(f => '<div class="sp-row" data-field="' + esc(f.key) + '" role="button" tabindex="0"><div class="info"><b>' + esc(f.label) + '</b><span>' + (FIELD_TYPES[f.type] || f.type) + (f.unit ? ' · ' + esc(f.unit) : '') + (f.options ? ' · ' + esc(f.options.join(', ')) : '') + (f.locked ? ' · built in' : '') + '</span></div><span class="chev">›</span></div>').join('');
+  $('aboutText').textContent = 'Tree Survey ' + APP_VERSION + ' · ' + S.species.length + ' species · ' + S.fields.length + ' fields · ' + S.points.length + ' trees stored on this phone.';
+}
+$('setAccuracy').addEventListener('change', () => { const v = Math.max(1, Math.min(100, Math.round(Number($('setAccuracy').value) || 10))); S.settings.accuracyStandard = v; $('setAccuracy').value = v; save(); renderGps(); });
+$('setWake').addEventListener('click', () => { S.settings.wakeLock = !S.settings.wakeLock; save(); renderSettings(); applyWakeLock(); });
+$('setSound').addEventListener('click', () => { S.settings.sound = !S.settings.sound; save(); renderSettings(); if (S.settings.sound) clickSound(); });
+$('fieldList').addEventListener('click', e => { const r = e.target.closest('[data-field]'); if (r) openFieldSheet(r.dataset.field); });
+$('fieldList').addEventListener('keydown', e => { if (e.key === 'Enter') { const r = e.target.closest('[data-field]'); if (r) openFieldSheet(r.dataset.field); } });
+$('addFieldBtn').addEventListener('click', () => openFieldSheet(null));
+$('deleteAllBtn').addEventListener('click', () => {
+  if (!S.points.length && !S.species.length) { toast('Nothing to delete.'); return; }
+  if (!confirm('Delete every species, field, and tree on this phone? Save a backup first if you have not.')) return;
+  if (!confirm('Really delete everything? This cannot be undone.')) return;
+  S = defaultState(); save(); renderAll(); toast('All data deleted.');
+});
+
+/* ---------- screens ---------- */
+function showScreen(name) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.toggle('active', s.id === 'screen-' + name));
+  document.querySelectorAll('.tabs button').forEach(b => b.classList.toggle('active', b.dataset.screen === name));
+  $('settingsBtn').classList.toggle('active', name === 'settings');
+  if (name === 'log') renderLog(); if (name === 'species') renderSpecies(); if (name === 'export') renderExport(); if (name === 'settings') renderSettings();
+  window.scrollTo(0, 0);
+}
+document.querySelectorAll('.tabs button, #settingsBtn').forEach(b => b.addEventListener('click', () => showScreen(b.dataset.screen)));
+function renderAll() {
+  renderRecord(); renderGps();
+  const active = document.querySelector('.screen.active');
+  const n = active ? active.id.replace('screen-', '') : 'record';
+  if (n === 'log') renderLog(); if (n === 'species') renderSpecies(); if (n === 'export') renderExport(); if (n === 'settings') renderSettings();
+}
+
+/* ---------- lifecycle ---------- */
+document.addEventListener('visibilitychange', () => { if (!document.hidden) { startGps(); applyWakeLock(); renderGps(); } });
+window.addEventListener('pageshow', () => { startGps(); applyWakeLock(); });
+if (navigator.storage && navigator.storage.persist) { navigator.storage.persist().catch(() => {}); }
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('./sw.js').then(reg => {
+      reg.addEventListener('updatefound', () => {
+        const nw = reg.installing; if (!nw) return;
+        nw.addEventListener('statechange', () => { if (nw.state === 'installed' && navigator.serviceWorker.controller) toast('Update ready. Close and reopen the app to use it.', 'ok', 6000); });
+      });
+    }).catch(() => {});
+  });
+}
+renderAll();
+startGps();
+applyWakeLock();
+})();
+</script>
+</body>
+</html>
